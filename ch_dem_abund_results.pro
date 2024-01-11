@@ -45,6 +45,9 @@ PRO ch_dem_abund_results, abstr, line_data, aa, sigmaa, ltemp, dlogt, dem, inter
 ;
 ; MODIFICATION HISTORY:
 ;     Ver.1, 16-Jun-2021, Peter Young
+;     Ver.2, 11-Jan-2024, Peter Young
+;       Fixed bug when computing the abundance error in the type 2
+;       case (was using abstr instead of abstr_out).
 ;-
 
 
@@ -82,7 +85,7 @@ IF nk NE 0 THEN BEGIN
     IF n_elements(interr_scale) NE 0 THEN line_err=sqrt(line_err^2 + (line_int*interr_scale)^2)
     abstr_out[j].abund=line_int / $
                    total( contrib*dem*10.^ltemp*dlogt*alog(10.) )
-    abstr_out[j].error=abstr[j].abund * line_err / line_int
+    abstr_out[j].error=abstr_out[j].abund * line_err / line_int
     abstr_out[j].ratio=abstr_out[j].abund/ab_ref
   ENDFOR 
 ENDIF
