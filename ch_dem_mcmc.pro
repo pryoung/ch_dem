@@ -66,7 +66,9 @@ FUNCTION ch_dem_mcmc, line_data, ltemp=ltemp, lpress=lpress, ldens=ldens, interr
 ;	other preparation. 
 ;
 ; MODIFICATION HISTORY:
-;     Ver.0.1, 9-Aug-2019
+;     Ver.0.1, 9-Aug-2019, Peter Young
+;     Ver.0.2, 30-Oct-2024, Peter Young
+;       Modified how the output results are printed to the IDL window.
 ;-
 
 
@@ -164,9 +166,9 @@ k=where(abstr.type EQ 1)
 ab_ref=abstr[k[0]].abund
 ;
 ab_type=abstr[ld.ab_ind].type
-k=where(ab_type GE 1)
-ld_fit=ld[k]
-IF n_tags(ld_fit) EQ 0 THEN return,-1
+ind_ld_fit=where(ab_type GE 1,n_ld)
+IF n_ld EQ 0 THEN return,-1
+ld_fit=ld[ind_ld_fit]
 nfit=n_elements(ld_fit)
 
 
@@ -293,7 +295,6 @@ IF nk NE 0 THEN BEGIN
 ENDIF
 
 
-IF NOT keyword_set(quiet) THEN ch_dem_write_results,ld_fit, abstr
 
 
 
@@ -320,6 +321,13 @@ FOR i=0,nl-1 DO BEGIN
   ab_i=abstr[ld_all[i].ab_ind].abund
   ld_all[i].model_int=ab_i*total(dem*contrib_fn*10.^ltemp*dlogt*alog(10.))
 ENDFOR 
+
+;
+; Write the list of lines to the IDL window with observed and model intensities.
+;
+ld_fit=ld_all[ind_ld_fit]
+IF NOT keyword_set(quiet) THEN ch_dem_write_results,ld_fit, abstr
+
 
 ;
 ; Create the output structure.
