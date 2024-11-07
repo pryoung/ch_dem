@@ -17,13 +17,18 @@ FUNCTION ch_dem_plot, input, no_line_ints=no_line_ints, _extra=_extra, $
 ;
 ; INPUTS:
 ;      Input:  The structure returned by CH_DEM_GAUSS_FIT.
-;	
+;
+; OPTIONAL INPUTS:
+;      Xpos_Legend: Allows the x-position of the legend to be
+;                   adjusted.
+;
 ; KEYWORD PARAMETERS:
 ;      NO_LINE_INTS: If set, then the points and errors for each line
 ;                    intensity will not be plotted.
 ;
 ; OUTPUTS:
-;       Creates an IDL plot object showing the Gaussian DEM. For each
+;       Creates an IDL plot object showing the DEM function obtained
+;       from the ch_dem routines. For each
 ;       emission line a point with error bars is shown. If the model
 ;       perfectly reproduces the line intensity, then the point will
 ;       lie on the DEM curve. If the model intensity is too high, then
@@ -37,13 +42,19 @@ FUNCTION ch_dem_plot, input, no_line_ints=no_line_ints, _extra=_extra, $
 ;       Ver.3, 17-Jul-2019, Peter Young.
 ;         DEM now interpolated on linear scale rather than log; added
 ;         xpos_legend; increased symbol size.
+;       Ver.4, 07-Nov-2024, Peter Young.
+;         Modified how MCMC DEM is plotted; fixed bug when
+;         /no_line_ints was set.
 ;-
 
 
-w=window(dim=[600,450],background_color=bgcolor)
-
-th=2
-fs=14
+;
+; Set some default parameters for the plot.
+;
+IF n_elements(dimension) EQ 0 THEN dimension=[600,450]
+IF n_elements(position) EQ 0 THEN position=[0.14,0.12,0.97,0.97]
+IF n_elements(thick) EQ 0 THEN th=2 ELSE th=thick
+IF n_elements(font_size) EQ 0 THEN font_size=12 ELSE fs=font_size
 sym_siz=1.5
 
 scl=1d20
@@ -60,11 +71,32 @@ IF input.interr_scale NE -1. THEN err=sqrt(err^2 + (int*input.interr_scale)^2)
 int_ratio=int/model_int
 int_ratio_err=err/model_int
 
+;
+; The DEM for the MCMC method is typically plotted in a "stairstep" style.
+;
+IF input.method EQ 'mcmc' THEN stairstep=1
+
+
+w=window(dimension=dimension,background_color=bgcolor)
+
+
 p=plot(ltemp,dem,thick=th,xth=th,yth=th,/current, $
        ytitle='DEM / 10!u20!n K cm!u-5!n', $
        xtitle='Log!d10!n (Temperature / K)', $
-       font_size=fs,xticklen=0.02,yticklen=0.02, $
-       pos=[0.14,0.12,0.97,0.97],_extra=_extra,/xsty)
+       xticklen=0.02,yticklen=0.02, $
+       _extra=_extra,/xsty, $
+       stairstep=stairstep)
+
+;
+; Plots the DEM uncertainties for the MCMC method.
+;
+IF input.method EQ 'mcmc' AND keyword_set(no_line_ints) THEN BEGIN
+  nt=n_elements(ltemp)
+  demerr=input.demerr/scl
+  FOR i=0,nt-1 DO BEGIN
+    px=plot(/overplot,ltemp[i]*[1,1],demerr[i,*],th=th)
+  ENDFOR 
+ENDIF 
 
 
 ;
@@ -95,38 +127,41 @@ IF NOT keyword_set(no_line_ints) THEN BEGIN
                   sym_size=sym_siz)
     ENDIF 
   ENDFOR 
+
+  a=objarr(nab)
+  
+  FOR i=0,nab-1 DO BEGIN
+    z2element,input.abstr[i].elt_num,name
+    a[i]=plot(p.xrange,p.yrange,symbol=symbol[i],sym_thick=th, $
+              sym_size=sym_siz,hide=1,name=name,/overplot)
+  ENDFOR 
+
+  l=legend(target=a,sample_width=0,pos=[0.92,0.92],font_size=font_size,thick=th, $
+           horizontal_spacing=0.08)
+
 ENDIF
 
-a=objarr(nab)
-
-FOR i=0,nab-1 DO BEGIN
-  z2element,input.abstr[i].elt_num,name
-  a[i]=plot(p.xrange,p.yrange,symbol=symbol[i],sym_thick=th, $
-            sym_size=sym_siz,hide=1,name=name,/overplot)
-ENDFOR 
-
-l=legend(target=a,sample_width=0,pos=[0.92,0.92],font_size=fs,thick=th, $
-        horizontal_spacing=0.08)
-
-
-
-IF input.method EQ 'gauss' THEN BEGIN 
-xr=p.xrange
-yr=p.yrange
 ;
-IF n_elements(xpos_legend) EQ 0 THEN xpos_legend=0.95*xr[0]+0.05*xr[1]
+; The following adds text giving the Gaussian fit parameters for the 'gauss'
+; method.
+;
+IF input.method EQ 'gauss' THEN BEGIN 
+  xr=p.xrange
+  yr=p.yrange
+;
+  IF n_elements(xpos_legend) EQ 0 THEN xpos_legend=0.95*xr[0]+0.05*xr[1]
 
-emstr=trim(string(format='(f8.2)',alog10(input.aa[0])))
-t1=text(xpos_legend,0.9*yr[1]+0.1*yr[0],/data,'Log EM!d0!n = '+emstr,font_size=fs)
-IF input.temp_log EQ 0 THEN BEGIN 
-  tstr='Log T!d0!n = '+trim(string(format='(f8.2)',alog10(input.aa[1])))
-  sigstr='Log $\sigma_T$ = '+trim(string(format='(f8.2)',alog10(input.aa[2])))
-ENDIF ELSE BEGIN
-  tstr='Log T!d0!n = '+trim(string(format='(f8.2)',input.aa[1]))
-  sigstr='$\sigma_T$ = '+trim(string(format='(f8.3)',input.aa[2]))
-ENDELSE 
-t2=text(xpos_legend,0.82*yr[1]+0.18*yr[0],/data,tstr,font_size=fs)
-t3=text(xpos_legend,0.74*yr[1]+0.26*yr[0],/data,sigstr,font_size=fs)
+  emstr=trim(string(format='(f8.2)',alog10(input.aa[0])))
+  t1=text(xpos_legend,0.9*yr[1]+0.1*yr[0],/data,'Log EM!d0!n = '+emstr,font_size=font_size)
+  IF input.temp_log EQ 0 THEN BEGIN 
+    tstr='Log T!d0!n = '+trim(string(format='(f8.2)',alog10(input.aa[1])))
+    sigstr='Log $\sigma_T$ = '+trim(string(format='(f8.2)',alog10(input.aa[2])))
+  ENDIF ELSE BEGIN
+    tstr='Log T!d0!n = '+trim(string(format='(f8.2)',input.aa[1]))
+    sigstr='$\sigma_T$ = '+trim(string(format='(f8.3)',input.aa[2]))
+  ENDELSE 
+  t2=text(xpos_legend,0.82*yr[1]+0.18*yr[0],/data,tstr,font_size=font_size)
+  t3=text(xpos_legend,0.74*yr[1]+0.26*yr[0],/data,sigstr,font_size=font_size)
 ENDIF
 
 

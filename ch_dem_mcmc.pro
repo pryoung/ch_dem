@@ -1,6 +1,9 @@
 
-FUNCTION ch_dem_mcmc, line_data, ltemp=ltemp, lpress=lpress, ldens=ldens, interr_scale=interr_scale, $
-                      dem=dem, dlogt=dlogt, abund_file=abund_file, fixed_abund=fixed_abund
+FUNCTION ch_dem_mcmc, line_data, ltemp=ltemp, lpress=lpress, ldens=ldens, $
+                      interr_scale=interr_scale, $
+                      dem=dem, dlogt=dlogt, abund_file=abund_file, $
+                      fixed_abund=fixed_abund, $
+                      nsim=nsim, mcmc_savefile=mcmc_savefile
 
 ;+
 ; NAME:
@@ -38,16 +41,35 @@ FUNCTION ch_dem_mcmc, line_data, ltemp=ltemp, lpress=lpress, ldens=ldens, interr
 ;                   is interr_scale*intensity. For example,
 ;                   interr_scale=0.1 will add 10% of the intensity to
 ;                   the error (added in quadrature). This can be useful if
-;                   the intensity errors are very small. 
+;                   the intensity errors are very small.
+;     Nsim:   The number of iterations to be performed. The default (set
+;             in the mcmc_dem routine) is 100.
+;     Mcmc_Savefile:  The name of the file where the MCMC output parameters
+;             are saved. The default is 'mcmc.sav' in the working directory.
 ;	
 ; KEYWORD PARAMETERS:
 ;     FIXED_ABUND:  If set, then element abundances are fixed.
 ;
 ; OUTPUTS:
+;     An IDL structure containing the tags:
+;      .method  'mcmc'
+;      .ltemp   Temperatures at which DEM tabulated.
+;      .dem     The DEM values.
+;      .line_data  The line_data input structure modified to include model
+;                  intensities and T_eff values.
+;      .abstr   Element abundance structure containing output abundances.
+;      .interr_scale  The value of interr_scale (if set).
+;      .log_dens   Log of density (if set).
+;      .log_press  Log of pressure (if set).
+;      .nsim    Value of nsim.
+;      .simdem  Array of size (nT,nsim+1) containing all of the simulated
+;               DEMs.
+;      .demerr  Array of size (nT,2) giving the lower and upper bounds on the DEM.
+;      .simprb  Array of size nsim giving the likelihood array (for checking
+;               convergence).
+;      .chi2_proxy  Proxy for the reduced chi^2 as suggested in MCMC software.
 ;
-; OPTIONAL OUTPUTS:
-;	Describe optional outputs here.  If the routine doesn't have any, 
-;	just delete this section.
+;     simdem[*,nsim] is the "best" DEM, which is also stored in the .dem tag.
 ;
 ; RESTRICTIONS:
 ;     Requires the PINTofALE IDL software to be installed (not
@@ -58,17 +80,13 @@ FUNCTION ch_dem_mcmc, line_data, ltemp=ltemp, lpress=lpress, ldens=ldens, interr
 ;     READ_ABUND, CH_DEM_WRITE_RESULTS
 ;
 ; EXAMPLE:
-;	Please provide a simple example here. An example from the
-;	DIALOG_PICKFILE documentation is shown below. Please try to
-;	include examples that do not rely on variables or data files
-;	that are not defined in the example code. Your example should
-;	execute properly if typed in at the IDL command line with no
-;	other preparation. 
 ;
 ; MODIFICATION HISTORY:
 ;     Ver.0.1, 9-Aug-2019, Peter Young
 ;     Ver.0.2, 30-Oct-2024, Peter Young
 ;       Modified how the output results are printed to the IDL window.
+;     Ver.0.3, 07-Nov-2024, Peter Young
+;       Added nsim= and mcmc_savefile= inputs; added additional tags to output.
 ;-
 
 
@@ -86,6 +104,11 @@ ENDIF
 IF n_elements(lpress) EQ 0 THEN BEGIN
   IF n_elements(ldens) EQ 0 THEN ldens=9.0
 ENDIF 
+
+;
+; This is where all of the MCMC output parameters are stored.
+;
+IF n_elements(mcmc_savefile) EQ 0 THEN mcmc_savefile='mcmc.sav'
 
 ;
 ; The following automatically works out the temperature range by
@@ -249,10 +272,12 @@ ENDIF
 ;
 result=mcmc_dem(wvl, flx, emis, fsigma=fsigma, z=z, $
                 chidir=!xuvtop, logt=ltemp, /noph, nhne=nhne, $
-                diffem=diffem, abund=ab, savfil='mcmc.save', $
-                abrng=abrng,aberr=aberr)
+                diffem=diffem, abund=ab, savfil=mcmc_savefile, $
+                abrng=abrng,aberr=aberr, nsim=nsim, simdem=simdem, $
+                simprb=simprb,lscal=lscal,demerr=demerr)
 
 dem=result/10.^ltemp*nhne
+FOR i=0,1 DO demerr[*,i]=demerr[*,i]/10.^ltemp*nhne
 
 
 ;
@@ -328,6 +353,13 @@ ENDFOR
 ld_fit=ld_all[ind_ld_fit]
 IF NOT keyword_set(quiet) THEN ch_dem_write_results,ld_fit, abstr
 
+;
+; I follow the prescription in Sect. 5 of the MCMC online manual for obtaining
+; the reduced chi-square proxy.
+;
+jnk=varsmooth(fltarr(nt),lscal,nueff=nueff)
+chi2_proxy=2*simprb[nsim]/(float(nfit)-nueff)
+
 
 ;
 ; Create the output structure.
@@ -342,7 +374,15 @@ output={method: 'mcmc', $
         abstr: abstr, $
         interr_scale: interr_scale, $
         log_dens: ldens, $
-        log_press: lpress }
+        log_press: lpress, $
+        nsim: nsim, $
+        simdem: simdem, $
+        demerr: demerr, $
+        simprb: simprb, $
+        chi2_proxy: chi2_proxy, $
+        time_stamp: systime()}
+
+
 
 
 return,output
