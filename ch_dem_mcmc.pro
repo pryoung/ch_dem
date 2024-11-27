@@ -3,7 +3,8 @@ FUNCTION ch_dem_mcmc, line_data, ltemp=ltemp, lpress=lpress, ldens=ldens, $
                       interr_scale=interr_scale, $
                       dem=dem, dlogt=dlogt, abund_file=abund_file, $
                       fixed_abund=fixed_abund, $
-                      nsim=nsim, mcmc_savefile=mcmc_savefile
+                      nsim=nsim, mcmc_savefile=mcmc_savefile, $
+                      smoot=smoot
 
 ;+
 ; NAME:
@@ -46,6 +47,8 @@ FUNCTION ch_dem_mcmc, line_data, ltemp=ltemp, lpress=lpress, ldens=ldens, $
 ;             in the mcmc_dem routine) is 100.
 ;     Mcmc_Savefile:  The name of the file where the MCMC output parameters
 ;             are saved. The default is 'mcmc.sav' in the working directory.
+;     Smoot:  A scalar greater than 1 that enforces a greater degree of
+;             smoothing of the DEM.
 ;	
 ; KEYWORD PARAMETERS:
 ;     FIXED_ABUND:  If set, then element abundances are fixed.
@@ -87,6 +90,9 @@ FUNCTION ch_dem_mcmc, line_data, ltemp=ltemp, lpress=lpress, ldens=ldens, $
 ;       Modified how the output results are printed to the IDL window.
 ;     Ver.0.3, 07-Nov-2024, Peter Young
 ;       Added nsim= and mcmc_savefile= inputs; added additional tags to output.
+;     Ver.0.4, 27-Nov-2024, Peter Young
+;       Added smoot= optional input; now computes lscal using the findscale
+;       routine.
 ;-
 
 
@@ -266,7 +272,6 @@ IF nk NE 0 THEN BEGIN
   abrng[j,1]=ab[j]*10.
 ENDIF 
 
-
 ;
 ; This is the call to the PINTofALE routine mcmc_dem. 
 ;
@@ -274,7 +279,8 @@ result=mcmc_dem(wvl, flx, emis, fsigma=fsigma, z=z, $
                 chidir=!xuvtop, logt=ltemp, /noph, nhne=nhne, $
                 diffem=diffem, abund=ab, savfil=mcmc_savefile, $
                 abrng=abrng,aberr=aberr, nsim=nsim, simdem=simdem, $
-                simprb=simprb,lscal=lscal,demerr=demerr)
+                simprb=simprb,demerr=demerr, $
+                smoot=smoot)
 
 dem=result/10.^ltemp*nhne
 FOR i=0,1 DO demerr[*,i]=demerr[*,i]/10.^ltemp*nhne
@@ -357,9 +363,14 @@ IF NOT keyword_set(quiet) THEN ch_dem_write_results,ld_fit, abstr
 ; I follow the prescription in Sect. 5 of the MCMC online manual for obtaining
 ; the reduced chi-square proxy.
 ;
+; The parameter lscal is not output by mcmc_dem, but can be obtained from
+; findscale. Here I calculate lscal, but it can also be found in the mcmc save
+; file.
+;
+lscal=findscale(emis)
+IF n_elements(smoot) NE 0 THEN lscal=lscal*smoot
 jnk=varsmooth(fltarr(nt),lscal,nueff=nueff)
 chi2_proxy=2*simprb[nsim]/(float(nfit)-nueff)
-
 
 ;
 ; Create the output structure.
@@ -380,10 +391,8 @@ output={method: 'mcmc', $
         demerr: demerr, $
         simprb: simprb, $
         chi2_proxy: chi2_proxy, $
+        nueff: nueff, $
         time_stamp: systime()}
-
-
-
 
 return,output
 
