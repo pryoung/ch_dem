@@ -73,6 +73,8 @@ FUNCTION ch_dem_read_line_ids, filename, int_file=int_file,  $
 ;               by ch_dem_gauss_fit).
 ;        .logt_eff  The effective (log) temperature of the line
 ;               (inserted by ch_dem_gauss_fit).
+;        .logt_max  The temperature at which the contribution
+;               function peaks (inserted by ch_dem_add_contrib).
 ;        .init_ab_ind Integer that gets populated during the DEM
 ;               minimization process.
 ;        .ab_type   Integer that gets populated during the DEM
@@ -131,7 +133,9 @@ FUNCTION ch_dem_read_line_ids, filename, int_file=int_file,  $
 ;         Don't check velocities if the line intensities weren't
 ;         specified.
 ;      Ver.14, 19-May-2020, Peter Young
-;         Added /no_pop_delete keyword.
+;         Added /no_pop_delete keyword; added logt_max to output structure.
+;      Ver.15, 11-May-2025, Peter Young
+;         Added logt_max to output structure.
 ;-
 
 
@@ -163,6 +167,7 @@ str={ion: '', $
      err: -1., $
      model_int: -1., $    ; to be filled after DEM computed
      logt_eff: -1., $     ; to be filled after DEM computed
+     logt_max: -1., $     ; to be filled after contrib. fn. computed.
      ab_ind: -1, $
      dwvl_check: dwvl_check, $
      blend_tag: '', $

@@ -54,7 +54,7 @@ FUNCTION ch_dem_add_contrib, line_data, log_temp, avalfile=avalfile, $
 ;         (a 1D array of same size as LOG_TEMP).
 ;
 ; CALLS:
-;     CH_DEM_PROCESS_BLENDS, CH_LOOKUP_GOFNT
+;     CH_DEM_PROCESS_BLENDS, CH_LOOKUP_GOFNT, CH_CALC_IONEQ, CH_DEM_READ_AVALS
 ;
 ; EXAMPLE:
 ;     IDL> line_data=ch_dem_read_line_ids('line_list.txt',int_file='ints.txt')
@@ -63,10 +63,10 @@ FUNCTION ch_dem_add_contrib, line_data, log_temp, avalfile=avalfile, $
 ;     IDL> result=ch_dem_add_contrib(line_data,log_temp,log_dens=9.0)
 ;
 ; MODIFICATION HISTORY:
-;     Ver.0.1, 31-Jul-2019, Peter Young.
-;     Ver.0.2, 12-Aug-2019, Peter Young.
-;       Now adds a tag to line_data for the contribution function;
-;       modified how default lookup directory is set up.
+;     Ver.1, 07-May-2025, Peter Young
+;       If ioneq_file is not specified, then the routine calculates a
+;       file with ch_calc_ioneq using the specified density/pressure.
+;       The file is then used for all the contribution functions.
 ;-
 
 
@@ -77,8 +77,6 @@ IF n_params() LT 2 THEN BEGIN
   print,'   Either log_dens or log_press must be specified.'
   return,-1
 ENDIF 
-
-
 
 ;
 ; Look for the A-value file associated with the lookup tables. Note
@@ -94,7 +92,6 @@ ENDIF ELSE BEGIN
   print,'                      in the working directory.'
   return,-1
 ENDELSE 
-
 
 ;
 ; Here I look for the lookup tables. The priority is:
@@ -120,7 +117,12 @@ ENDIF
 nt=n_elements(log_temp)
 line_data=add_tag(temporary(line_data),dblarr(nt),'contrib')
 
-
+IF n_elements(ioneq_file) EQ 0 THEN BEGIN
+  IF n_elements(log_dens) NE 0 THEN density=10.^log_dens
+  IF n_elements(log_press) NE 0 THEN pressure=10.^log_press
+  ltemp=findgen(81)/20.+4.0
+  d=ch_calc_ioneq(10.^ltemp,outname=ioneq_file,density=density,pressure=pressure)
+ENDIF 
 
 ;
 ; Pick out the standard lines in LINE_DATA and add the contribution functions
@@ -135,16 +137,16 @@ FOR i=0,n-1 DO BEGIN
   cstruc=ch_lookup_gofnt(line_data[i].ion, $
                          dir_lookup=lookup_dir, aval_str=aval_str, $
                          /noabund,log_temp=log_temp,log_dens=log_dens, log_press=log_press, $
-                         ioneq_file=ioneq_file)
+                         ioneq_file=ioneq_file,advanced=0)
   IF n_tags(cstruc) NE 0 THEN BEGIN 
     line_data[i].contrib=cstruc.gofnt
+    getmax=max(cstruc.gofnt,imax)
+    line_data[i].logt_max=log_temp[imax]
   ENDIF ELSE BEGIN
     print,'% CH_DEM_ADD_CONTRIB: problem with lookup table access. Returning...'
     return,-1
   ENDELSE 
 ENDFOR 
-
-
 
 ;
 ; Any blends flagged with 'blend_tag' are merged here. Note these are
@@ -156,8 +158,6 @@ ENDFOR
 ; input 'line_data'.
 ;
 ld=ch_dem_process_blends(line_data)
-
-
 
 return,ld
 
