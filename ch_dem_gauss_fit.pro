@@ -4,7 +4,7 @@ FUNCTION ch_dem_gauss_fit, line_data, ldens=ldens, lpress=lpress, abund_file=abu
                            temp_log=temp_log, initial_params=initial_params,quiet=quiet, $
                            ab_elt_fix=ab_elt_fix, fixed_abund=fixed_abund, $
                            logt_min=logt_min, logt_max=logt_max, dlogt=dlogt, $
-                           swtch_ab=swtch_ab
+                           swtch_ab=swtch_ab, ioneq_file=ioneq_file
 
 ;+
 ; NAME:
@@ -61,7 +61,10 @@ FUNCTION ch_dem_gauss_fit, line_data, ldens=ldens, lpress=lpress, abund_file=abu
 ;                 one indicates the abundance should be a
 ;                 variable. This is expected to be used only in
 ;                 special cases - see CHIANTI Technical Report
-;                 No. 22. 
+;                 No. 22.
+;      Ioneq_File: Specifies the name of a CHIANTI ioneq file to use. If
+;                  not specified, then the routine will calculate a new
+;                  file, which slows the routine down.
 ;
 ; KEYWORD PARAMETERS:
 ;      TEMP_LOG: If set, then the model Gaussian is defined in logT space
@@ -70,24 +73,23 @@ FUNCTION ch_dem_gauss_fit, line_data, ldens=ldens, lpress=lpress, abund_file=abu
 ; 
 ; OUTPUTS:
 ;      A structure containing the results. The tags are:
+;        .method  String set to 'gauss'.
 ;        .aa   3-element array containing fit params (EM0,T0,sigmaT).
 ;        .sigmaa Errors on fit params.
 ;        .chi2 Reduced chi^2 for fit.
 ;        .yfit The line intensities from the model.
 ;        .ltemp The log temperatures at which the DEM is defined.
 ;        .dem   The DEM function.
-;        .lteff The effective temperatures for the lines.
-;        .int_ratio  Ratios of observed to model intensities.
-;        .int_ratio_err Errors on the ratios.
 ;        .temp_log    This is keyword_set(temp_log).
 ;        .coldepth  The column depth (cm) corresponding to the DEM. 
-;        .abund  Structure containing information about the
-;                abundances. 
+;        .abstr  The abundance structure.
+;        .interr_scale  The value of interr_scale.
+;        .log_dens  Value of ldens (if defined).
+;        .log_press  Value of lpress (if defined).
 ;
 ; CALLS:
-;      READ_ABUND, READ_IONEQ, 
-;      CH_DEM_GOFNT, CH_DEM_PROCESS_INDEX_STRING, Z2ELEMENT,
-;      CH_DEM_PROCESS_ABUND, CH_DEM_INIT_ABUND
+;      CH_DEM_ADD_CONTRIB, CH_DEM_PROCESS_ABUND, CH_DEM_GAUSS_FIT_FN,
+;      CH_DEM_GAUSS_COMPUTE_DEM, CH_DEM_ABUND_RESULTS
 ;
 ; MODIFICATION HISTORY:
 ;      Ver.1, 17-Jul-2018, Peter Young.
@@ -134,42 +136,46 @@ FUNCTION ch_dem_gauss_fit, line_data, ldens=ldens, lpress=lpress, abund_file=abu
 ;         free parameters.
 ;      Ver.14, 17-Jun-2021, Peter Young
 ;         Added SWTCH_AB optional input; now exits gracefully if
-;         ch_dem_process_abund fails. 
+;         ch_dem_process_abund fails.
+;      Ver.15, 07-May-2025, Peter Young
+;         Added ioneq_file= optional input.
+;      Ver.16, 12-May-2025, Peter Young
+;         Modified how initial parameters are defined; updates to
+;         header; now prints an error if ions are close to the edge of
+;         the temperature range.
 ;-
 
 
 IF n_params() LT 1 THEN BEGIN
-  print,'Use:  IDL> output=ch_dem_gauss_fit(line_data [, ldens=, /temp_log, initial_params=, abund_file='
-  print,'                                   interr_scale=, dir_lookup=, dlogt=, logt_min= '
-  print,'                                   logt_max=, /fixed_abund, initial_params=, /quiet '
+  print,'Use:  IDL> output=ch_dem_gauss_fit(line_data [, ldens=, lpress=, /temp_log, initial_params=, abund_file='
+  print,'                                   interr_scale=, dir_lookup=, dlogt=, logt_min=, ab_elt_fix=, '
+  print,'                                   logt_max=, /fixed_abund, /quiet, ioneq_file=, '
   print,'                                   swtch_ab= ])'
   return,-1
 ENDIF 
 
-
-
-IF n_elements(initial_params) GT 0 AND n_elements(initial_params) NE 3 THEN BEGIN
-  print,'% CH_DEM_GAUSS_FIT: the input INITIAL_PARAMS must be a 3-element array. Returning...'
-  return,-1
-ENDIF 
+;
+; I've commented this out as the routine now estimates initial parameters
+; that should be pretty good.
+;
+;; IF n_elements(initial_params) GT 0 AND n_elements(initial_params) NE 3 THEN BEGIN
+;;   message,/info,/cont,'the input INITIAL_PARAMS must be a 3-element array. Returning...'
+;;   return,-1
+;; ENDIF 
 
 
 ; Check the ldens and lpress inputs. We need one or the other, but not
 ; both (or neither).
 ;
 IF n_elements(ldens) NE 0 AND n_elements(lpress) NE 0 THEN BEGIN
-  print,'% CH_DEM_GAUSS_FIT: Please specify either LDENS or LPRESS, but not both. Returning...'
+  message,/info,/cont,'Please specify either LDENS or LPRESS, but not both. Returning...'
   return,-1
 ENDIF 
 ;
 IF n_elements(ldens) EQ 0 AND n_elements(lpress) EQ 0 THEN BEGIN
-  print,'% CH_DEM_GAUSS_FIT: Please specify either LDENS or LPRESS. Returning...'
+  message,/info,/cont,'Please specify either LDENS or LPRESS. Returning...'
   return,-1
 ENDIF
-
-
-
-
 
 ;
 ; Set the temperature range.
@@ -194,8 +200,7 @@ ld_all=line_data
 nl=n_elements(ld_all)
 k=where(ld_all.int NE -1.,nk)
 IF nk EQ 0 THEN BEGIN
-  print,'% CH_DEM_GAUSS_FIT: The input LINE_DATA structure does not contain observed intensities. Please run '
-  print,'                     ch_dem_read_line_ids to load intensities from an input file. Returning...'
+  message,/info,/cont,'The input LINE_DATA structure does not contain observed intensities. Please run ch_dem_read_line_ids to load intensities from an input file. Returning...'
   return,-1
 ENDIF 
 
@@ -222,39 +227,21 @@ ld=ch_dem_add_contrib(ld_all, ltemp, avalfile=avalfile, $
                       log_press=lpress, log_dens=ldens, $
                       ioneq_file=ioneq_file, dir_lookup=dir_lookup)
 IF n_tags(ld) EQ 0 THEN BEGIN
-  print,'% CH_DEM_GAUSS_FIT: error found. Returning...'
+  message,/info,/cont,'Error found. Returning...'
   return,-1
 ENDIF 
 
 
+k=where(ld_all.logt_max GE logt_max-0.3,n_max)
+k=where(ld_all.logt_max LE logt_min+0.3,n_min)
+logt_mean=mean(ld_all.logt_max)
+IF n_max GT 0 OR n_min GT 0 THEN BEGIN
+  message,/info,/cont,'Some of the ions are close to the edges of the temperature range. Try adjusting the range with the inputs logt_min= and logt_max=.'
+  print,format='("   Current values: logt_min=",f4.2,",  logt_max=",f4.2)',logt_min,logt_max
+  print,format='("   Suggested values: logt_min=",f4.2,",  logt_max=",f4.2)',logt_mean-1.0,logt_mean+1.0
+  return,-1
+ENDIF 
 
-;
-; INITIAL PARAMETER SETUP
-; -----------------------
-; Set the scaling factor (SCL) and the initial parameters for
-; temp_log=0/temp_log=1 cases.
-; The scaling factor is used to make the parameters that are actually
-; fit by MPFIT to be close to unity.
-;
-IF keyword_set(temp_log) THEN BEGIN
- ;
- ; Set initial parameters for DEM.
- ;   init[0] -> EM_0/1e27
- ;   init[1] -> log T0
- ;   init[2] -> sigma_logT
- ;
-  scl=[1d27,1.0,1.0]   ; contains scaling parameters
-  IF n_elements(initial_params) EQ 0 THEN init=[1.0,6.0,0.1] ELSE init=initial_params/scl
-ENDIF ELSE BEGIN 
- ;
- ; Set initial parameters for DEM.
- ;   init[0] -> EM_0/1e27
- ;   init[1] -> T_0/1e6
- ;   init[2] -> sigma_T/1e5
- ;
-  scl=[1d27,1d6,1d5]   ; contains scaling parameters
-  IF n_elements(initial_params) EQ 0 THEN init=[1.0,1.0,3.0] ELSE init=initial_params/scl
-ENDELSE
 
 ;
 ; ELEMENT ABUNDANCE SETUP
@@ -263,6 +250,7 @@ ENDELSE
 ; - A subset of LD is extracted to LD_FIT -> these are the lines that
 ;   will be used in the DEM fitting procedure
 ;
+init=[1d0,1d0,1d0]
 IF n_elements(abund_file) EQ 0 THEN abund_file=!abund_file
 chck=file_info(abund_file)
 IF NOT chck.exists THEN BEGIN
@@ -285,6 +273,42 @@ nfit=n_elements(ld_fit)
 
 
 ;
+; INITIAL PARAMETERS SETUP
+; ------------------------
+; The parameters that will be fit will be close to 1, so I define scaling
+; parameters to convert between the fitted paramaters and the actual
+; parameters. The fit parameters will be output to AA, thus the actual
+; parameters will be AA*SCL.
+;
+; An exception is when the /temp_log keyword is set. In this case init[1]
+; (the initial value for the temperature is just set to the initial guess for logT.
+;
+; The initial temperature is obtained by taking the mean log T_max of the
+; reference ions. The initial EM value is obtained the reference ion closest to
+; T_max and using the peak value of the contribution function.
+;
+mean_ltemp=average(ld_fit.logt_max)
+k=where(abstr[ld_fit.ab_ind].type EQ 1,nk)
+getmin=min(abs(ld_fit[k].logt_max-mean_ltemp),imin)
+iref=k[imin[0]]
+contrib_ref=ld[iref].contrib
+contrib_max=max(contrib_ref)
+;
+; Below are the initial estimates for EM, T and sigma_T.
+;
+init_em=2.*sqrt(2.*!pi)/alog(10.)*ld_fit[iref].int/ab_ref/contrib_max
+init_sigma=10.^mean_ltemp/10.
+IF keyword_set(temp_log) THEN BEGIN
+  init_t=1.
+  init[1]=mean_ltemp
+ENDIF ELSE BEGIN 
+  init_t=10.^mean_ltemp
+ENDELSE 
+;
+scl=[init_em,init_t,init_sigma]
+
+
+;
 ; Modify the line intensity errors with INTERR_SCALE (if ncessary). 
 ;
 IF n_elements(interr_scale) NE 0 THEN BEGIN
@@ -297,9 +321,6 @@ IF n_elements(interr_scale) NE 0 THEN BEGIN
 ENDIF
 int=ld_fit.int
 err=ld_fit.err
-
-
-
 
 ;
 ; SET PARAMETER LIMITS (PARINFO structure)
@@ -324,8 +345,6 @@ IF np GT 3 THEN BEGIN
   FOR i=0,np-4 DO parinfo[i+3].limited=[1,0]
 ENDIF
 
-
-
 ;
 ; I pass additional data to the fit function by using the structure
 ; 'other'. Note that 'line_data', 'abstr', 'ab_ref', 'ltemp' and 'dem'
@@ -341,7 +360,6 @@ other={ line_data: ld_fit, $
         scl: scl, $
         temp_log: keyword_set(temp_log) }
 
-
 ;
 ; Check the number of free parameters to see if the fit is possible.
 ;
@@ -354,14 +372,13 @@ IF np GE nfit THEN BEGIN
    return,-1
 ENDIF 
 
-
 ;
 ; This is the minimization procedure, producing fit parameters AA.
 ;
 aa=mpfitfun('ch_dem_gauss_fit_fn',findgen(nfit), int , err, init, $
             perror=sigmaa, /quiet, bestnorm=bestnorm,yfit=yfit, $
-            parinfo=parinfo,status=status, functargs= other)
-
+            parinfo=parinfo,status=status, functargs= other, niter=niter, $
+            maxiter=1000)
 
 k=where(sigmaa EQ 0.,nk)
 IF nk GT 0 THEN BEGIN
@@ -371,7 +388,6 @@ IF nk GT 0 THEN BEGIN
   print,format='(a27,3e12.3)',init*scl
   return,-1
 ENDIF 
-
 
 ;
 ; Need to re-scale the DEM fit parameters

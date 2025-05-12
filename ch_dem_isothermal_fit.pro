@@ -297,6 +297,15 @@ ld_fit.model_int=yfit
 IF NOT keyword_set(quiet) THEN ch_dem_write_results,ld_fit, abstr
 
 
+chi2=bestnorm/float(nfit-np)
+IF NOT keyword_set(quiet) THEN BEGIN 
+  print,''
+  print,'Fit parameters: '
+  print,format='("  log T",f9.3," +/-",f7.3,"   ( T =",e9.2," )")',aa[0],sigmaa[0],10.^aa[0]
+  print,format='(" log EM",f9.3," +/-",f7.3,"   ( EM =",e9.2," )")',aa[1],sigmaa[1],10.^aa[1]
+  print,''
+  print,format='("Reduced chi^2: ",f8.2)',chi2
+ENDIF 
 
 
 ;

@@ -26,10 +26,6 @@ FUNCTION ch_dem_gauss_fit_fn, x, p, _extra=e
 ;              information needed to compute the intensities. It is
 ;              defined in ch_dem_gauss_fit. 
 ;
-; KEYWORD PARAMETERS:
-;      TEMP_LOG: If set, then the Gaussian is defined in log-T space
-;                rather than T.
-;
 ; OUTPUTS:
 ;      Computes line intensities (units: erg/cm2/s/sr) for a set of
 ;      N(X) emission lines. 
@@ -49,13 +45,12 @@ FUNCTION ch_dem_gauss_fit_fn, x, p, _extra=e
 ;         Moved "extra_fac" outside of the nl intensity loop and
 ;         re-defined phi instead; removed /log keyword (now passed in
 ;         the _extra structure); now ch_dem_compute_ints to compute
-;         intensities. 
+;         intensities.
+;      Ver.6, 12-May-2025, Peter Young
+;         Updated header, no change to code.
 ;-
 
-
-
 phi=ch_dem_gauss_compute_dem(e.ltemp,p,scl=e.scl,temp_log=e.temp_log)
-
 
 ;
 ; I compute the intensities from the DEM using
@@ -70,7 +65,6 @@ data={ phi: phi, $
        p: p }
 ;      
 int=ch_dem_compute_ints(data)
-
 
 return,int
 
