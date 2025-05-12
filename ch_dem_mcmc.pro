@@ -4,7 +4,8 @@ FUNCTION ch_dem_mcmc, line_data, ltemp=ltemp, lpress=lpress, ldens=ldens, $
                       dem=dem, dlogt=dlogt, abund_file=abund_file, $
                       fixed_abund=fixed_abund, $
                       nsim=nsim, mcmc_savefile=mcmc_savefile, $
-                      smoot=smoot
+                      smoot=smoot, swtch_ab=swtch_ab, $
+                      ioneq_file=ioneq_file
 
 ;+
 ; NAME:
@@ -32,11 +33,13 @@ FUNCTION ch_dem_mcmc, line_data, ltemp=ltemp, lpress=lpress, ldens=ldens, $
 ;     Dlogt:  The bin size of the LTEMP array. Set to 0.10 dex by
 ;             default. 
 ;     Ldens:  Specifies the logarithm of the electron number density
-;             (units: cm^-3) to be used for the calculation. Default
-;             is 9.0.
+;              (units: cm^-3) to be used for the calculation.Either
+;              ldens or lpress should be specified (not both).
+;     Lpress:  Specifies the logarithm of the electron pressure
+;              (units: K cm^-3) to be used for the calculation. Either
+;              ldens or lpress should be specified (not both).
 ;     Abund_File:  The CHIANTI abundance file to be used for the
-;                  calculation. The default is
-;                  sun_coronal_1992_feldman_ext.abund.
+;                  calculation. The default is !abund_file.
 ;     Interr_Scale: A number between 0 and 1 that adds an additional
 ;                   amount to the lines' intensity errors that
 ;                   is interr_scale*intensity. For example,
@@ -49,6 +52,16 @@ FUNCTION ch_dem_mcmc, line_data, ltemp=ltemp, lpress=lpress, ldens=ldens, $
 ;             are saved. The default is 'mcmc.sav' in the working directory.
 ;     Smoot:  A scalar greater than 1 that enforces a greater degree of
 ;             smoothing of the DEM.
+;     Swtch_Ab:  An array of same size as the number of unique
+;                elements in LINE_DATA. A zero indicates the
+;                element's abundance should be fixed, and a
+;                one indicates the abundance should be a
+;                variable. This is expected to be used only in
+;                special cases - see CHIANTI Technical Report
+;                No. 22.
+;     Ioneq_File:  The name of a CHIANTI ionization equilibrium file. If not
+;                  specified, then the ionization balance is calculated by
+;                  ch_dem_add_contrib.
 ;	
 ; KEYWORD PARAMETERS:
 ;     FIXED_ABUND:  If set, then element abundances are fixed.
@@ -85,14 +98,8 @@ FUNCTION ch_dem_mcmc, line_data, ltemp=ltemp, lpress=lpress, ldens=ldens, $
 ; EXAMPLE:
 ;
 ; MODIFICATION HISTORY:
-;     Ver.0.1, 9-Aug-2019, Peter Young
-;     Ver.0.2, 30-Oct-2024, Peter Young
-;       Modified how the output results are printed to the IDL window.
-;     Ver.0.3, 07-Nov-2024, Peter Young
-;       Added nsim= and mcmc_savefile= inputs; added additional tags to output.
-;     Ver.0.4, 27-Nov-2024, Peter Young
-;       Added smoot= optional input; now computes lscal using the findscale
-;       routine.
+;     Ver.1, 12-May-2025, Peter Young
+;       Added swtch_ab= optional input compared to earlier versions.
 ;-
 
 
@@ -106,10 +113,18 @@ IF chck EQ 0 THEN BEGIN
   return,-1
 ENDIF
 
-
-IF n_elements(lpress) EQ 0 THEN BEGIN
-  IF n_elements(ldens) EQ 0 THEN ldens=9.0
+; Check the ldens and lpress inputs. We need one or the other, but not
+; both (or neither).
+;
+IF n_elements(ldens) NE 0 AND n_elements(lpress) NE 0 THEN BEGIN
+  message,/info,/cont,'Please specify either LDENS or LPRESS, but not both. Returning...'
+  return,-1
 ENDIF 
+;
+IF n_elements(ldens) EQ 0 AND n_elements(lpress) EQ 0 THEN BEGIN
+  message,/info,/cont,'Please specify either LDENS or LPRESS. Returning...'
+  return,-1
+ENDIF
 
 ;
 ; This is where all of the MCMC output parameters are stored.
@@ -190,7 +205,8 @@ IF NOT chck.exists THEN BEGIN
   print,'% CH_DEM_MCMC: could not find the element abundance file. Returning...'
   return,-1
 ENDIF 
-abstr=ch_dem_process_abund(ld,abund_file=abund_file,ab_elt_fix=ab_elt_fix,fixed_abund=fixed_abund)
+abstr=ch_dem_process_abund(ld,abund_file=abund_file,ab_elt_fix=ab_elt_fix, $
+                           fixed_abund=fixed_abund, swtch_ab=swtch_ab)
 k=where(abstr.type EQ 1)
 ab_ref=abstr[k[0]].abund
 ;
@@ -324,10 +340,6 @@ IF nk NE 0 THEN BEGIN
     abstr[j].ratio=abstr[j].abund/ab_ref
   ENDFOR 
 ENDIF
-
-
-
-
 
 ;
 ; Compute the T_eff of each line in LINE_DATA, and populate the ab_ind

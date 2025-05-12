@@ -28,8 +28,11 @@ FUNCTION ch_dem_gauss_fit, line_data, ldens=ldens, lpress=lpress, abund_file=abu
 ;
 ; OPTIONAL INPUTS:
 ;      Ldens:  Specifies the logarithm of the electron number density
-;              (units: cm^-3) to be used for the calculation. Default
-;              is 9.0.
+;              (units: cm^-3) to be used for the calculation.Either
+;              ldens or lpress should be specified (not both).
+;      Lpress:  Specifies the logarithm of the electron pressure
+;              (units: K cm^-3) to be used for the calculation. Either
+;              ldens or lpress should be specified (not both).
 ;      Abund_File:  The CHIANTI abundance file to be used for the
 ;                   calculation. The default is
 ;                   sun_coronal_1992_feldman_ext.abund.
