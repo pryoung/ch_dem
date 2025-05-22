@@ -100,6 +100,8 @@ FUNCTION ch_dem_mcmc, line_data, ltemp=ltemp, lpress=lpress, ldens=ldens, $
 ; MODIFICATION HISTORY:
 ;     Ver.1, 12-May-2025, Peter Young
 ;       Added swtch_ab= optional input compared to earlier versions.
+;     Ver.2, 22-May-2025, Peter Young
+;       Modified call to ch_dem_write_results.
 ;-
 
 
@@ -215,7 +217,6 @@ ind_ld_fit=where(ab_type GE 1,n_ld)
 IF n_ld EQ 0 THEN return,-1
 ld_fit=ld[ind_ld_fit]
 nfit=n_elements(ld_fit)
-
 
 ;
 ; Need to multiply by 10^23 for the MCMC routines.
@@ -366,10 +367,36 @@ FOR i=0,nl-1 DO BEGIN
 ENDFOR 
 
 ;
+; Repeat the above, but for the ld_fit structure
+;
+nab=n_elements(abstr)
+nl=n_elements(ld_fit)
+FOR i=0,nl-1 DO BEGIN
+  contrib_fn=ld_fit[i].contrib
+  func=contrib_fn*dem*10.^ltemp
+  getmax=max(func,imax)
+  ld_fit[i].logt_eff=ltemp[imax]
+ ;
+ ; Populate ld_fit.ab_ind
+ ;
+  FOR j=0,nab-1 DO BEGIN
+    k=where(ld_fit.element_num EQ abstr[j].elt_num)
+    ld_fit[k].ab_ind=j
+  ENDFOR
+ ;
+ ; Populate ld_fit.model_int
+ ;
+  ab_i=abstr[ld_fit[i].ab_ind].abund
+  ld_fit[i].model_int=ab_i*total(dem*contrib_fn*10.^ltemp*dlogt*alog(10.))
+ENDFOR 
+
+
+
+;
 ; Write the list of lines to the IDL window with observed and model intensities.
 ;
-ld_fit=ld_all[ind_ld_fit]
-IF NOT keyword_set(quiet) THEN ch_dem_write_results,ld_fit, abstr
+IF NOT keyword_set(quiet) THEN ch_dem_write_results,ld_fit,abstr, $
+   int_err_scale=int_err_scale
 
 ;
 ; I follow the prescription in Sect. 5 of the MCMC online manual for obtaining

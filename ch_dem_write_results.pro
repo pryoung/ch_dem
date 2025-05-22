@@ -1,5 +1,5 @@
 
-PRO ch_dem_write_results, ld_fit, abstr
+PRO ch_dem_write_results, ld_fit, abstr, int_err_scale=int_err_scale
 
 
 ;+
@@ -25,12 +25,19 @@ PRO ch_dem_write_results, ld_fit, abstr
 ;              ch_dem_process_abund containing the abundance results
 ;              from the DEM method.
 ;
+; OPTIONAL INPUTS:
+;     Int_err_scale:  This is passed through from the DEM routines and
+;                     modifies the intensity error value printed to the
+;                     screen.
+;
 ; OUTPUTS:
 ;     Prints text to the IDL input window giving the results from the
 ;     CH_DEM procedure. 
 ;
 ; MODIFICATION HISTORY:
 ;     Ver.1, 16-Jun-2021, Peter Young
+;     Ver.2, 22-May-2025, Peter Young
+;       Added int_err_scale= optional input.
 ;-
 
 
@@ -41,8 +48,13 @@ PRO ch_dem_write_results, ld_fit, abstr
 nfit=n_elements(ld_fit)
 print,'    Ion                 Wvl   Obs_Int   Obs_Err   Model_Int'
 FOR i=0,nfit-1 DO BEGIN
+  IF n_elements(int_err_scale) NE 0 THEN BEGIN
+    err=sqrt(ld_fit[i].err^2 + (ld_fit[i].int*int_err_scale)^2)
+  ENDIF ELSE BEGIN
+    err=ld_fit[i].err
+  ENDELSE 
   print,format='(a7,a20,2f10.2,f12.2)', ld_fit[i].ion,ld_fit[i].label, $
-        ld_fit[i].int,ld_fit[i].err,ld_fit[i].model_int
+        ld_fit[i].int,err,ld_fit[i].model_int
 ENDFOR
 
 ;
