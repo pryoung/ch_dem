@@ -31,7 +31,7 @@ FUNCTION ch_dem_mcmc, line_data, ltemp=ltemp, lpress=lpress, ldens=ldens, $
 ;             Tmax of each ion in LINE_DATA and then sets the range to
 ;             be -0.15 and +0.15 of the min and max temperatures.
 ;     Dlogt:  The bin size of the LTEMP array. Set to 0.10 dex by
-;             default. 
+;             default. It is ignored if LTEMP is directly specified.
 ;     Ldens:  Specifies the logarithm of the electron number density
 ;              (units: cm^-3) to be used for the calculation.Either
 ;              ldens or lpress should be specified (not both).
@@ -102,6 +102,9 @@ FUNCTION ch_dem_mcmc, line_data, ltemp=ltemp, lpress=lpress, ldens=ldens, $
 ;       Added swtch_ab= optional input compared to earlier versions.
 ;     Ver.2, 22-May-2025, Peter Young
 ;       Modified call to ch_dem_write_results.
+;     Ver.3, 27-May-2025, Peter Young
+;       Fixed bug whereby dlogt needs to be calculated from ltemp if the latter
+;       is specfied.
 ;-
 
 
@@ -137,8 +140,10 @@ IF n_elements(mcmc_savefile) EQ 0 THEN mcmc_savefile='mcmc.sav'
 ; The following automatically works out the temperature range by
 ; considering +/- 0.15 either side of log Tmax of each ion.
 ;
-IF n_elements(dlogt) EQ 0 THEN dlogt=0.10
-IF n_elements(ltemp) EQ 0 THEN BEGIN 
+; The dlogt input is ignored if ltemp is set.
+;
+IF n_elements(dlogt) EQ 0 AND n_elements(ltemp) EQ 0 THEN dlogt=0.10
+IF n_elements(ltemp) EQ 0 THEN BEGIN
   ltemp_min=7.0
   ltemp_max=5.0
   FOR i=0,n_elements(line_data)-1 DO BEGIN
@@ -149,9 +154,19 @@ IF n_elements(ltemp) EQ 0 THEN BEGIN
   nt=round((ltemp_max-ltemp_min)/dlogt)+1
   ltemp=findgen(nt)*dlogt + ltemp_min
 ENDIF ELSE BEGIN
+  ;
+  ; I have to calculate dlogt from ltemp and make sure the step size
+  ; isn't uneven.
+  ;
+  dlogt_step=ltemp[1:*]-ltemp[0:-2]
+  dlogt=mean(dlogt_step)
+  IF max(dlogt_step)-dlogt GE dlogt*0.1 OR dlogt-min(dlogt_step) GE dlogt*0.1 THEN BEGIN
+    message,/info,/cont,'The specified LTEMP array has an uneven step size. Returning...'
+    return,-1
+  ENDIF 
+  ;
   nt=n_elements(ltemp)
 ENDELSE 
-
 
 ;
 ; Make a copy of LINE_DATA. From this point on, line_data is not
@@ -301,7 +316,6 @@ result=mcmc_dem(wvl, flx, emis, fsigma=fsigma, z=z, $
 
 dem=result/10.^ltemp*nhne
 FOR i=0,1 DO demerr[*,i]=demerr[*,i]/10.^ltemp*nhne
-
 
 ;
 ; 'ab' contains updated abundances for 'type 2' elements, so load
