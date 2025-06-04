@@ -136,6 +136,8 @@ FUNCTION ch_dem_read_line_ids, filename, int_file=int_file,  $
 ;         Added /no_pop_delete keyword; added logt_max to output structure.
 ;      Ver.15, 11-May-2025, Peter Young
 ;         Added logt_max to output structure.
+;      Ver.16, 04-Jun-2025, Peter Young
+;         Now catches the case when there's an empty line in the ID file.
 ;-
 
 
@@ -177,10 +179,13 @@ a=''
 b=''
 c=0.
 d=''
+str1=''
 
 openr,lin,filename,/get_lun
 WHILE eof(lin) NE 1 DO BEGIN
-  readf,lin,format='(a6,a2,f10.0,a40)',a,b,c,d
+  readf,lin,str1
+  IF trim(str1) EQ '' THEN CONTINUE 
+  reads,str1,format='(a6,a2,f10.0,a40)',a,b,c,d
   str.ion=trim(a)
   str.blend_tag=trim(b)
   convertname,str.ion,iz
