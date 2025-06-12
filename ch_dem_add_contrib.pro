@@ -2,7 +2,9 @@
 
 FUNCTION ch_dem_add_contrib, line_data, log_temp, avalfile=avalfile, $
                              log_press=log_press, log_dens=log_dens, $
-                             ioneq_file=ioneq_file, dir_lookup=dir_lookup
+                             ioneq_file=ioneq_file, dir_lookup=dir_lookup, $
+                             truncate=truncate, trunc_factor=trunc_factor, $
+                             brooks=brooks
 
 ;+
 ; NAME:
@@ -43,7 +45,19 @@ FUNCTION ch_dem_add_contrib, line_data, log_temp, avalfile=avalfile, $
 ;     Dir_Lookup: The name of a directory containing the lookup tables
 ;                 for the contribution function calculation. If not
 ;                 set, then the routine first looks in $CH_DEM_LOOKUP
-;                 (if defined), then the current working directory. 
+;                 (if defined), then the current working directory.
+;     Trunc_factor: Specifies how the contribution functions are
+;                 truncated. Only values greater than
+;                 max(contrib)*trunc_factor are retained, unless
+;                 truncate=0. The default is 0.005.
+;
+; KEYWORD PARAMETERS:
+;     TRUNCATE:  If set, then the contribution functions are truncated
+;                (see trunc_factor=). By default this is switched on.
+;                To switch it off, set truncate=0.
+;     BROOKS:  If set, then the routine uses the Brooks method of
+;              truncating the contribution functions. That is, only
+;              values within +/-0.3 dex of the Tmax are retained. 
 ;
 ; OUTPUTS:
 ;     A structure with the same format as LINE_DATA is returned, but
@@ -67,16 +81,40 @@ FUNCTION ch_dem_add_contrib, line_data, log_temp, avalfile=avalfile, $
 ;       If ioneq_file is not specified, then the routine calculates a
 ;       file with ch_calc_ioneq using the specified density/pressure.
 ;       The file is then used for all the contribution functions.
+;     Ver.2, 12-Jun-2025, Peter Young
+;       Added /brooks, /truncate and trunc_factor, which implement methods
+;       for truncating the contribution functions so that only the largest
+;       values are used. The default is truncate=1 and trunc_factor=0.005.
 ;-
 
 
 IF n_params() LT 2 THEN BEGIN
   print,'Use:  IDL> output = ch_dem_add_contrib( line_data, log_temp [, log_dens=, log_press=, '
-  print,'                                        avalfile=, ioneq_file=, dir_lookup= ] )'
+  print,'                                        avalfile=, ioneq_file=, dir_lookup=, truncate= '
+  print,'                                        trunc_factor=, /brooks ] )'
   print,''
   print,'   Either log_dens or log_press must be specified.'
+  print,'   /truncate is on by default; switch it off with truncate=0.'
   return,-1
 ENDIF 
+
+;
+; The default is for the contribution functions to be truncated
+;
+IF n_elements(truncate) EQ 0 THEN truncate=1b
+
+;
+; Set the default for trunc_factor.
+;
+IF n_elements(trunc_factor) EQ 0 THEN BEGIN
+  trunc_factor=0.005
+ENDIF ELSE BEGIN
+  IF trunc_factor GE 1.0 THEN BEGIN
+    message,/info,/cont,'The input trunc_factor= must be < 1. Returning...'
+    return,-1
+  ENDIF 
+ENDELSE
+
 
 ;
 ; Look for the A-value file associated with the lookup tables. Note
@@ -139,7 +177,19 @@ FOR i=0,n-1 DO BEGIN
                          /noabund,log_temp=log_temp,log_dens=log_dens, log_press=log_press, $
                          ioneq_file=ioneq_file,advanced=0)
   IF n_tags(cstruc) NE 0 THEN BEGIN 
-    line_data[i].contrib=cstruc.gofnt
+    contrib=cstruc.gofnt
+    CASE 1 OF
+      keyword_set(brooks): BEGIN
+        getmax=max(contrib,imax)
+        j=where(log_temp GE log_temp[imax]-0.3 AND log_temp LE log_temp[imax]+0.3)
+        line_data[i].contrib[j]=contrib[j]
+      END 
+      keyword_set(truncate): BEGIN 
+        j=where(contrib GE trunc_factor*max(contrib))
+        line_data[i].contrib[j]=contrib[j]
+      END
+      ELSE: line_data[i].contrib=contrib
+    ENDCASE 
     getmax=max(cstruc.gofnt,imax)
     line_data[i].logt_max=log_temp[imax]
   ENDIF ELSE BEGIN

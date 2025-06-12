@@ -5,7 +5,8 @@ FUNCTION ch_dem_mcmc, line_data, ltemp=ltemp, lpress=lpress, ldens=ldens, $
                       fixed_abund=fixed_abund, $
                       nsim=nsim, mcmc_savefile=mcmc_savefile, $
                       smoot=smoot, swtch_ab=swtch_ab, $
-                      ioneq_file=ioneq_file
+                      ioneq_file=ioneq_file, trunc_factor=trunc_factor, $
+                      truncate=truncate, brooks=brooks
 
 ;+
 ; NAME:
@@ -27,9 +28,11 @@ FUNCTION ch_dem_mcmc, line_data, ltemp=ltemp, lpress=lpress, ldens=ldens, $
 ;
 ; OPTIONAL INPUTS:
 ;     Ltemp:  An array of log10 temperatures at which the DEM will be
-;             defined. If not specified, then the routine computes the
-;             Tmax of each ion in LINE_DATA and then sets the range to
-;             be -0.15 and +0.15 of the min and max temperatures.
+;             defined. If not specified, then the routine ch_dem_get_ltemp
+;             is called. This computes the temperature range by considering
+;             the contribution functions of the lines in LINE_DATA. The
+;             keyword /brooks (see below) implements a slightly different
+;             scheme.
 ;     Dlogt:  The bin size of the LTEMP array. Set to 0.10 dex by
 ;             default. It is ignored if LTEMP is directly specified.
 ;     Ldens:  Specifies the logarithm of the electron number density
@@ -62,9 +65,17 @@ FUNCTION ch_dem_mcmc, line_data, ltemp=ltemp, lpress=lpress, ldens=ldens, $
 ;     Ioneq_File:  The name of a CHIANTI ionization equilibrium file. If not
 ;                  specified, then the ionization balance is calculated by
 ;                  ch_dem_add_contrib.
+;     Truncate:  The contribution functions are truncated such that only
+;                values > trunc_factor*max(contrib) are retained. This is *on*
+;                be default and is switched off by setting truncate=0.
+;     Trunc_Factor:  A scalar setting the truncation factor (see above). The
+;                    default is 0.005.
 ;	
 ; KEYWORD PARAMETERS:
 ;     FIXED_ABUND:  If set, then element abundances are fixed.
+;     BROOKS:  If set, then the method of David Brooks is used for setting
+;              the temperature array and truncating the contribution
+;              functions.
 ;
 ; OUTPUTS:
 ;     An IDL structure containing the tags:
@@ -105,6 +116,8 @@ FUNCTION ch_dem_mcmc, line_data, ltemp=ltemp, lpress=lpress, ldens=ldens, $
 ;     Ver.3, 27-May-2025, Peter Young
 ;       Fixed bug whereby dlogt needs to be calculated from ltemp if the latter
 ;       is specfied.
+;     Ver.4, 12-Jun-2025, Peter Young
+;       Introduced ch_dem_get_ltemp for calculating the temperature array.
 ;-
 
 
@@ -131,48 +144,30 @@ IF n_elements(ldens) EQ 0 AND n_elements(lpress) EQ 0 THEN BEGIN
   return,-1
 ENDIF
 
+IF n_elements(trunc_factor) EQ 0 THEN trunc_factor=0.005
+
 ;
 ; This is where all of the MCMC output parameters are stored.
 ;
 IF n_elements(mcmc_savefile) EQ 0 THEN mcmc_savefile='mcmc.sav'
 
 ;
-; The following automatically works out the temperature range by
-; considering +/- 0.15 either side of log Tmax of each ion.
-;
-; The dlogt input is ignored if ltemp is set.
-;
-IF n_elements(dlogt) EQ 0 AND n_elements(ltemp) EQ 0 THEN dlogt=0.10
-IF n_elements(ltemp) EQ 0 THEN BEGIN
-  ltemp_min=7.0
-  ltemp_max=5.0
-  FOR i=0,n_elements(line_data)-1 DO BEGIN
-    ltmax=ch_tmax(line_data[i].ion,/log)
-    IF ltmax-0.15 LT ltemp_min THEN ltemp_min=ltmax-0.15
-    IF ltmax+0.15 GT ltemp_max THEN ltemp_max=ltmax+0.15
-  ENDFOR 
-  nt=round((ltemp_max-ltemp_min)/dlogt)+1
-  ltemp=findgen(nt)*dlogt + ltemp_min
-ENDIF ELSE BEGIN
-  ;
-  ; I have to calculate dlogt from ltemp and make sure the step size
-  ; isn't uneven.
-  ;
-  dlogt_step=ltemp[1:*]-ltemp[0:-2]
-  dlogt=mean(dlogt_step)
-  IF max(dlogt_step)-dlogt GE dlogt*0.1 OR dlogt-min(dlogt_step) GE dlogt*0.1 THEN BEGIN
-    message,/info,/cont,'The specified LTEMP array has an uneven step size. Returning...'
-    return,-1
-  ENDIF 
-  ;
-  nt=n_elements(ltemp)
-ENDELSE 
-
-;
 ; Make a copy of LINE_DATA. From this point on, line_data is not
 ; used. 
 ;
 ld_all=line_data
+
+;
+; Set the intervals (dlogt) for the log temperature array.
+; 
+IF n_elements(dlogt) EQ 0 AND n_elements(ltemp) EQ 0 THEN dlogt=0.10
+
+;
+; Get the log temperature (ltemp) array if it hasn't been specified.
+;
+ltemp=ch_dem_get_ltemp(line_data,log_press=lpress,log_dens=ldens, $
+                       ioneq_file=ioneq_file,brooks=brooks)
+nt=n_elements(ltemp)
 
 ;
 ; Make sure ld_all has observed intensities.
@@ -184,7 +179,6 @@ IF nk EQ 0 THEN BEGIN
   print,'               ch_dem_read_line_ids to load intensities from an input file. Returning...'
   return,-1
 ENDIF 
-
 
 ;
 ; Note on the LINE_DATA structures.
@@ -206,12 +200,14 @@ ENDIF
 ;
 ld=ch_dem_add_contrib(ld_all, ltemp, avalfile=avalfile, $
                       log_press=lpress, log_dens=ldens, $
-                      ioneq_file=ioneq_file, dir_lookup=dir_lookup)
+                      ioneq_file=ioneq_file, dir_lookup=dir_lookup, $
+                      truncate=truncate,trunc_factor=trunc_factor, $
+                      brooks=brooks)
+
 IF n_tags(ld) EQ 0 THEN BEGIN
   print,'% CH_DEM_MCMC: error found. Returning...'
   return,-1
 ENDIF 
-
 
 ;
 ; Element abundance information is stored in ABSTR and AB_REF.
