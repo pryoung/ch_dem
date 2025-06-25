@@ -85,6 +85,8 @@ FUNCTION ch_dem_add_contrib, line_data, log_temp, avalfile=avalfile, $
 ;       Added /brooks, /truncate and trunc_factor, which implement methods
 ;       for truncating the contribution functions so that only the largest
 ;       values are used. The default is truncate=1 and trunc_factor=0.005.
+;     Ver.3, 25-Jun-2025, Peter Young
+;       Added /no_pair in call to add_tag.
 ;-
 
 
@@ -153,7 +155,7 @@ ENDIF
 ; contrib from the previous call.
 ;
 nt=n_elements(log_temp)
-line_data=add_tag(temporary(line_data),dblarr(nt),'contrib')
+line_data=add_tag(temporary(line_data),dblarr(nt),'contrib',/no_pair)
 
 IF n_elements(ioneq_file) EQ 0 THEN BEGIN
   IF n_elements(log_dens) NE 0 THEN density=10.^log_dens
@@ -189,7 +191,7 @@ FOR i=0,n-1 DO BEGIN
         line_data[i].contrib[j]=contrib[j]
       END
       ELSE: line_data[i].contrib=contrib
-    ENDCASE 
+    ENDCASE
     getmax=max(cstruc.gofnt,imax)
     line_data[i].logt_max=log_temp[imax]
   ENDIF ELSE BEGIN

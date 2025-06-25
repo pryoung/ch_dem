@@ -1,5 +1,5 @@
 
-PRO ch_dem_write_results, ld_fit, abstr, int_err_scale=int_err_scale
+PRO ch_dem_write_results, ld_fit, abstr, interr_scale=interr_scale
 
 
 ;+
@@ -26,7 +26,7 @@ PRO ch_dem_write_results, ld_fit, abstr, int_err_scale=int_err_scale
 ;              from the DEM method.
 ;
 ; OPTIONAL INPUTS:
-;     Int_err_scale:  This is passed through from the DEM routines and
+;     Interr_scale:  This is passed through from the DEM routines and
 ;                     modifies the intensity error value printed to the
 ;                     screen.
 ;
@@ -38,6 +38,9 @@ PRO ch_dem_write_results, ld_fit, abstr, int_err_scale=int_err_scale
 ;     Ver.1, 16-Jun-2021, Peter Young
 ;     Ver.2, 22-May-2025, Peter Young
 ;       Added int_err_scale= optional input.
+;     Ver.3, 25-Jun-2025, Peter Young
+;       Changed int_err_scale to interr_scale to be consistent with
+;       other routines.
 ;-
 
 
@@ -48,8 +51,8 @@ PRO ch_dem_write_results, ld_fit, abstr, int_err_scale=int_err_scale
 nfit=n_elements(ld_fit)
 print,'    Ion                 Wvl   Obs_Int   Obs_Err   Model_Int'
 FOR i=0,nfit-1 DO BEGIN
-  IF n_elements(int_err_scale) NE 0 THEN BEGIN
-    err=sqrt(ld_fit[i].err^2 + (ld_fit[i].int*int_err_scale)^2)
+  IF n_elements(interr_scale) NE 0 THEN BEGIN
+    err=sqrt(ld_fit[i].err^2 + (ld_fit[i].int*interr_scale)^2)
   ENDIF ELSE BEGIN
     err=ld_fit[i].err
   ENDELSE 

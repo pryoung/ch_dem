@@ -118,6 +118,9 @@ FUNCTION ch_dem_mcmc, line_data, ltemp=ltemp, lpress=lpress, ldens=ldens, $
 ;       is specfied.
 ;     Ver.4, 12-Jun-2025, Peter Young
 ;       Introduced ch_dem_get_ltemp for calculating the temperature array.
+;     Ver.5, 25-Jun-2025, Peter Young
+;       Fixed error whereby int_err_scale was being used in call to
+;       ch_dem_write_results instead of interr_scale.
 ;-
 
 
@@ -406,7 +409,7 @@ ENDFOR
 ; Write the list of lines to the IDL window with observed and model intensities.
 ;
 IF NOT keyword_set(quiet) THEN ch_dem_write_results,ld_fit,abstr, $
-   int_err_scale=int_err_scale
+   interr_scale=interr_scale
 
 ;
 ; I follow the prescription in Sect. 5 of the MCMC online manual for obtaining
