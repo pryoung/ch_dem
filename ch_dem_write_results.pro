@@ -68,7 +68,7 @@ ENDFOR
 ;
 nab=n_elements(abstr)
 print,''
-print,' Element     Type      Log Ab    Abundance (x10^6)'
+print,' Element     Type      Log Ab   Abundance (x10^6)'
 FOR i=0,nab-1 DO BEGIN
   z2element,abstr[i].elt_num,name,/symbol
   CASE abstr[i].type OF
@@ -90,6 +90,7 @@ FOR i=0,nab-1 DO BEGIN
     ENDELSE 
   ENDIF ELSE BEGIN
     errstr='          '
+    format='(6x,a2,a12,f8.2,f10.2,a11)'
   ENDELSE 
   print,format=format,name,type,alog10(abstr[i].abund)+12., $
         abstr[i].abund*1e6,errstr

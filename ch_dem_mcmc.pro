@@ -377,18 +377,16 @@ ENDIF
 ; and model_int tags of LINE_DATA.
 ;
 nab=n_elements(abstr)
+FOR i=0,nab-1 DO BEGIN
+  k=where(ld_all.element_num EQ abstr[i].elt_num)
+  ld_all[k].ab_ind=i
+ENDFOR
+;
 FOR i=0,nl-1 DO BEGIN
   contrib_fn=ld_all[i].contrib
   func=contrib_fn*dem*10.^ltemp
   getmax=max(func,imax)
   ld_all[i].logt_eff=ltemp[imax]
- ;
- ; Populate ld_all.ab_ind
- ;
-  ;; FOR j=0,nab-1 DO BEGIN
-  ;;   k=where(ld_all.element_num EQ abstr[j].elt_num)
-  ;;   ld_all[k].ab_ind=j
-  ;; ENDFOR
  ;
  ; Populate ld_all.model_int
  ;
@@ -412,6 +410,7 @@ FOR i=0,nl-1 DO BEGIN
   ab_i=abstr[ld_fit[i].ab_ind].abund
   ld_fit[i].model_int=ab_i*total(dem*contrib_fn*10.^ltemp*dlogt*alog(10.))
 ENDFOR 
+
 
 ;
 ; Write the list of lines to the IDL window with observed and model intensities.
