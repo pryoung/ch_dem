@@ -121,6 +121,9 @@ FUNCTION ch_dem_mcmc, line_data, ltemp=ltemp, lpress=lpress, ldens=ldens, $
 ;     Ver.5, 25-Jun-2025, Peter Young
 ;       Fixed error whereby int_err_scale was being used in call to
 ;       ch_dem_write_results instead of interr_scale.
+;     Ver.6, 26-Jun-2025, Peter Young
+;       The dlogt= input was not being passed to ch_dem_get_ltemp, so this has
+;       been fixed.
 ;-
 
 
@@ -169,7 +172,7 @@ IF n_elements(dlogt) EQ 0 AND n_elements(ltemp) EQ 0 THEN dlogt=0.10
 ; Get the log temperature (ltemp) array if it hasn't been specified.
 ;
 ltemp=ch_dem_get_ltemp(line_data,log_press=lpress,log_dens=ldens, $
-                       ioneq_file=ioneq_file,brooks=brooks)
+                       ioneq_file=ioneq_file,brooks=brooks,dlogt=dlogt)
 nt=n_elements(ltemp)
 
 ;
