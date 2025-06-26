@@ -117,6 +117,9 @@ FUNCTION ch_dem_process_abund, line_data, abund, ab_elt_fix=ab_elt_fix, $
 ;          Small change to print output.
 ;       Ver.5, 17-Jun-2021, Peter Young
 ;          Added SWTCH_AB optional input.
+;       Ver.6, 26-Jun-2025, Peter Young
+;          Added abund_lower and abund_upper tags to output, for use
+;          with ch_dem_mcmc.
 ;-
 
 
@@ -162,6 +165,8 @@ str={elt_num: 0,$
      abund: -1., $
      error: -1., $
      ratio: -1., $
+     abund_upper: -1., $
+     abund_lower: -1., $
      ratio_error: -1.}
 abstr=replicate(str,n_elt)
 abstr.elt_num=elt_num_unq

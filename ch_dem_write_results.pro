@@ -41,6 +41,9 @@ PRO ch_dem_write_results, ld_fit, abstr, interr_scale=interr_scale
 ;     Ver.3, 25-Jun-2025, Peter Young
 ;       Changed int_err_scale to interr_scale to be consistent with
 ;       other routines.
+;     Ver.4, 26-Jun-2025, Peter Young
+;       Modified how the abundances are printed to take account of
+;       abund_lower and abund_upper tags (if available).
 ;-
 
 
@@ -65,7 +68,7 @@ ENDFOR
 ;
 nab=n_elements(abstr)
 print,''
-print,' Element   Abundance (x10^6)  Log Ab     Type'
+print,' Element     Type      Log Ab    Abundance (x10^6)'
 FOR i=0,nab-1 DO BEGIN
   z2element,abstr[i].elt_num,name,/symbol
   CASE abstr[i].type OF
@@ -75,12 +78,21 @@ FOR i=0,nab-1 DO BEGIN
     3: type='fixed'
   ENDCASE
   IF abstr[i].type EQ 2 OR abstr[i].type EQ 0 THEN BEGIN
-    errstr=' +/-'+string(format='(f6.2)',abstr[i].error*1e6)
+    IF abstr[i].error NE -1. THEN BEGIN 
+      errstr=' +/- '+trim(string(format='(f6.2)',abstr[i].error*1e6))
+      format='(6x,a2,a12,f8.2,f10.2,a11)'
+      errstr=strpad(errstr,11,/after,fill=' ')
+    ENDIF ELSE BEGIN
+      errstr=' (+ '+trim(string(format='(f6.2)',abstr[i].abund_upper*1e6-abstr[i].abund*1e6))+')'+ $
+             ' (- '+trim(string(format='(f6.2)',abstr[i].abund*1e6-abstr[i].abund_lower*1e6))+')'
+      errstr=strpad(errstr,22,/after,fill=' ')
+      format='(6x,a2,a12,f8.2,f10.2,a22)'
+    ENDELSE 
   ENDIF ELSE BEGIN
     errstr='          '
   ENDELSE 
-  print,format='(6x,a2,f10.2,a10,f8.2,a12)',name,abstr[i].abund*1e6,errstr, $
-        alog10(abstr[i].abund)+12.,type
+  print,format=format,name,type,alog10(abstr[i].abund)+12., $
+        abstr[i].abund*1e6,errstr
 ENDFOR
 
 

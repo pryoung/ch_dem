@@ -123,7 +123,11 @@ FUNCTION ch_dem_mcmc, line_data, ltemp=ltemp, lpress=lpress, ldens=ldens, $
 ;       ch_dem_write_results instead of interr_scale.
 ;     Ver.6, 26-Jun-2025, Peter Young
 ;       The dlogt= input was not being passed to ch_dem_get_ltemp, so this has
-;       been fixed.
+;       been fixed; removed setting ab_ind for ld_all and ld_fit at end of code,
+;       as it was already set; for "optimized" element abundances, I now give
+;       upper and lower limits, consistent with the MCMC output ; for
+;       "algebraic" abundances I still give +/- values, consistent with how they
+;       are calculated.
 ;-
 
 
@@ -323,18 +327,28 @@ FOR i=0,1 DO demerr[*,i]=demerr[*,i]/10.^ltemp*nhne
 ; 'ab' contains updated abundances for 'type 2' elements, so load
 ; these into abstr
 ;
-; I'm not updating the error as mcmc gives lower and upper
-; confidence bounds (in the aberr output) rather than 1-sigma
-; errors. Instead I just print the bounds to the screen.
-;
-k=where(abstr.type EQ 2,nk)
-IF nk NE 0 THEN BEGIN
-  abstr[k].abund=ab[abstr[k].elt_num-1]
-  err_minus=abs(abstr[k].abund-aberr[abstr[k].elt_num-1,0])
-  err_plus=abs(abstr[k].abund-aberr[abstr[k].elt_num-1,1])
-  abstr[k].error=mean([err_minus,err_plus])
-  abstr[k].ratio=abstr[k].ratio/ab_ref
-ENDIF
+;; k=where(abstr.type EQ 2,nk)
+;; IF nk NE 0 THEN BEGIN
+;;   abstr[k].abund=ab[abstr[k].elt_num-1]
+;;   err_minus=abs(abstr[k].abund-aberr[abstr[k].elt_num-1,0])
+;;   err_plus=abs(abstr[k].abund-aberr[abstr[k].elt_num-1,1])
+;;   abstr[k].error=mean([err_minus,err_plus])
+;;   abstr[k].ratio=abstr[k].ratio/ab_ref
+;; ENDIF
+
+nab=n_elements(abstr)
+FOR i=0,nab-1 DO BEGIN
+  IF abstr[i].type EQ 2 THEN BEGIN
+    abstr[i].abund=ab[abstr[i].elt_num-1]
+    abstr[i].abund_lower=aberr[abstr[i].elt_num-1,0]
+    abstr[i].abund_upper=aberr[abstr[i].elt_num-1,1]
+    err_minus=abs(abstr[i].abund-aberr[abstr[i].elt_num-1,0])
+    err_plus=abs(abstr[i].abund-aberr[abstr[i].elt_num-1,1])
+;    abstr[i].error=mean([err_minus,err_plus])
+    abstr[k].ratio=abstr[i].abund/ab_ref
+  ENDIF 
+ENDFOR 
+
 
 ;
 ; 'type 0' elements are not part of the minimization procedure but
@@ -371,10 +385,10 @@ FOR i=0,nl-1 DO BEGIN
  ;
  ; Populate ld_all.ab_ind
  ;
-  FOR j=0,nab-1 DO BEGIN
-    k=where(ld_all.element_num EQ abstr[j].elt_num)
-    ld_all[k].ab_ind=j
-  ENDFOR
+  ;; FOR j=0,nab-1 DO BEGIN
+  ;;   k=where(ld_all.element_num EQ abstr[j].elt_num)
+  ;;   ld_all[k].ab_ind=j
+  ;; ENDFOR
  ;
  ; Populate ld_all.model_int
  ;
@@ -393,20 +407,11 @@ FOR i=0,nl-1 DO BEGIN
   getmax=max(func,imax)
   ld_fit[i].logt_eff=ltemp[imax]
  ;
- ; Populate ld_fit.ab_ind
- ;
-  FOR j=0,nab-1 DO BEGIN
-    k=where(ld_fit.element_num EQ abstr[j].elt_num)
-    ld_fit[k].ab_ind=j
-  ENDFOR
- ;
  ; Populate ld_fit.model_int
  ;
   ab_i=abstr[ld_fit[i].ab_ind].abund
   ld_fit[i].model_int=ab_i*total(dem*contrib_fn*10.^ltemp*dlogt*alog(10.))
 ENDFOR 
-
-
 
 ;
 ; Write the list of lines to the IDL window with observed and model intensities.
