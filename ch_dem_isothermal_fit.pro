@@ -85,6 +85,8 @@ FUNCTION ch_dem_isothermal_fit, line_data, ldens=ldens, lpress=lpress, $
 ;
 ; MODIFICATION HISTORY:
 ;      Ver. 1, 11-May-2025, Peter Young
+;      Ver. 2, 30-Jun-2025, Peter Young
+;        Fixed bug in specification of INIT when abundances are varied.
 ;-
 
 
@@ -196,7 +198,6 @@ IF n_tags(ld_fit) EQ 0 THEN return,-1
 nfit=n_elements(ld_fit)
 
 
-
 ;
 ; INITIAL PARAMETER SETUP
 ; -----------------------
@@ -211,8 +212,8 @@ FOR i=0,nk-1 DO BEGIN
 ENDFOR
 em_init=ld_fit[k].int/abstr[ld_fit[k].ab_ind].abund/contrib_max
 ;
-init=[mean(ld_fit[k].logt_max),alog10(mean(em_init))]
-
+init[0]=mean(ld_fit[k].logt_max)
+init[1]=alog10(mean(em_init))
 
 ;
 ; Modify the line intensity errors with INTERR_SCALE (if ncessary). 
@@ -275,7 +276,7 @@ ENDIF
 ;
 aa=mpfitfun('ch_dem_isothermal_fit_fn',findgen(nfit), int , err, init, $
             perror=sigmaa, /quiet, bestnorm=bestnorm,yfit=yfit, $
-            parinfo=parinfo,status=status, functargs= other)
+            parinfo=parinfo,status=status, functargs= other,errmsg=errmsg)
 
 
 ;
