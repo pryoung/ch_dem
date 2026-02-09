@@ -128,6 +128,8 @@ FUNCTION ch_dem_mcmc, line_data, ltemp=ltemp, lpress=lpress, ldens=ldens, $
 ;       upper and lower limits, consistent with the MCMC output ; for
 ;       "algebraic" abundances I still give +/- values, consistent with how they
 ;       are calculated.
+;     Ver.7, 22-Oct-2025, Peter Young
+;       Fixed bug whereby LTEMP was not being recognised.
 ;-
 
 
@@ -175,8 +177,17 @@ IF n_elements(dlogt) EQ 0 AND n_elements(ltemp) EQ 0 THEN dlogt=0.10
 ;
 ; Get the log temperature (ltemp) array if it hasn't been specified.
 ;
-ltemp=ch_dem_get_ltemp(line_data,log_press=lpress,log_dens=ldens, $
-                       ioneq_file=ioneq_file,brooks=brooks,dlogt=dlogt)
+IF n_elements(ltemp) EQ 0 THEN BEGIN 
+  ltemp=ch_dem_get_ltemp(line_data,log_press=lpress,log_dens=ldens, $
+                         ioneq_file=ioneq_file,brooks=brooks,dlogt=dlogt)
+ENDIF ELSE BEGIN
+  diff=ltemp[1:*]-ltemp[0:-2]
+  dlogt=mean(diff)
+  IF max(abs(diff-dlogt)) GT 0.05*dlogt THEN BEGIN
+    message,/info,/cont,'The array LOGT should be evenly spaced. Returning...'
+    return,-1.
+  ENDIF 
+ENDELSE 
 nt=n_elements(ltemp)
 
 ;

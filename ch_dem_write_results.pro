@@ -44,6 +44,9 @@ PRO ch_dem_write_results, ld_fit, abstr, interr_scale=interr_scale
 ;     Ver.4, 26-Jun-2025, Peter Young
 ;       Modified how the abundances are printed to take account of
 ;       abund_lower and abund_upper tags (if available).
+;     Ver.5, 10-Jul-2025, Peter Young
+;       Now prints the abundances as ratios relative to the CHIANTI
+;       default file (!abund_file).
 ;-
 
 
@@ -64,11 +67,16 @@ FOR i=0,nfit-1 DO BEGIN
 ENDFOR
 
 ;
+; Get abundances from the CHIANTI default file (should be photospheric).
+;
+read_abund,!abund_file,ab,ref
+
+;
 ; Now print abundance results
 ;
 nab=n_elements(abstr)
 print,''
-print,' Element     Type      Log Ab   Abundance (x10^6)'
+print,' Element     Type      Log Ab   Abundance (x10^6)     Ratio (to CHIANTI default)'
 FOR i=0,nab-1 DO BEGIN
   z2element,abstr[i].elt_num,name,/symbol
   CASE abstr[i].type OF
@@ -80,20 +88,21 @@ FOR i=0,nab-1 DO BEGIN
   IF abstr[i].type EQ 2 OR abstr[i].type EQ 0 THEN BEGIN
     IF abstr[i].error NE -1. THEN BEGIN 
       errstr=' +/- '+trim(string(format='(f6.2)',abstr[i].error*1e6))
-      format='(6x,a2,a12,f8.2,f10.2,a11)'
+      format='(6x,a2,a12,f8.2,f10.2,a11,f12.3)'
       errstr=strpad(errstr,11,/after,fill=' ')
     ENDIF ELSE BEGIN
       errstr=' (+ '+trim(string(format='(f6.2)',abstr[i].abund_upper*1e6-abstr[i].abund*1e6))+')'+ $
              ' (- '+trim(string(format='(f6.2)',abstr[i].abund*1e6-abstr[i].abund_lower*1e6))+')'
       errstr=strpad(errstr,22,/after,fill=' ')
-      format='(6x,a2,a12,f8.2,f10.2,a22)'
+      format='(6x,a2,a12,f8.2,f10.2,a22,f12.3)'
     ENDELSE 
   ENDIF ELSE BEGIN
     errstr='          '
-    format='(6x,a2,a12,f8.2,f10.2,a11)'
+    format='(6x,a2,a12,f8.2,f10.2,a11,f12.3)'
   ENDELSE 
   print,format=format,name,type,alog10(abstr[i].abund)+12., $
-        abstr[i].abund*1e6,errstr
+        abstr[i].abund*1e6,errstr, $
+        abstr[i].abund/ab[abstr[i].elt_num-1]
 ENDFOR
 
 
