@@ -120,6 +120,8 @@ FUNCTION ch_dem_process_abund, line_data, abund, ab_elt_fix=ab_elt_fix, $
 ;       Ver.6, 26-Jun-2025, Peter Young
 ;          Added abund_lower and abund_upper tags to output, for use
 ;          with ch_dem_mcmc.
+;       Ver.7, 02-Jun-2026, Peter Young
+;          Fixed bug when there are more than one type 2 elements.
 ;-
 
 
@@ -128,8 +130,6 @@ IF n_params() LT 1 THEN BEGIN
   print,'                                      init=, out_init=, /quiet, swtch_ab= ])'
   return,-1
 ENDIF 
-  
-
 
 elt_num=line_data.element_num
 elt_num_unq=elt_num[uniq(elt_num,sort(elt_num))]
@@ -175,8 +175,6 @@ FOR i=0,n_elt-1 DO BEGIN
   k=where(abstr[i].elt_num EQ line_data.element_num,nk)
   nlines[i]=nk
 ENDFOR 
-
-
 
 ;
 ; Use AB_ELT_FIX to specify the reference element (type=1), or
@@ -302,10 +300,11 @@ IF n_elements(abund) NE 0 AND n_elements(init) NE 0 THEN BEGIN
  ; none, then just return the original array.
  ;
   k=where(abstr.type EQ 2,nk)
-  IF nk NE 0 THEN BEGIN 
+  IF nk NE 0 THEN BEGIN
+    out_init=init
     FOR i=0,nk-1 DO BEGIN
       j=k[i]
-      out_init=[init,abstr[j].ratio]
+      out_init=[out_init,abstr[j].ratio]
       ni=n_elements(out_init)
       abstr[j].init_ab_ind=ni-1
     ENDFOR
@@ -315,22 +314,22 @@ IF n_elements(abund) NE 0 AND n_elements(init) NE 0 THEN BEGIN
 ENDIF
 
 IF NOT keyword_set(quiet) THEN BEGIN
-   n_ab=n_elements(abstr)
-   print,'% CH_DEM_PROCESS_ABUND: there are '+trim(n_ab)+' different elements. Their types are:'
-   FOR i=0,n_ab-1 DO BEGIN
-      type=abstr[i].type
-      CASE type OF
-         0: type_text='derived algebraically (single line)'
-         1: type_text='reference'
-         2: type_text='variable (multiple lines)'
-         3: type_text='fixed (/fixed_abund keyword)'
-      ENDCASE
-      type_text=strpad(type_text,40,fill=' ',/after)
-      z2element,abstr[i].elt_num,name,/symbol
-      name=strpad(name,2,fill=' ',/after)
-      print,format='(5x,i3,".",i5,2x,a2,"  type=",i1,"  -- ",a40)',i+1,abstr[i].elt_num,name,abstr[i].type,type_text
-   ENDFOR
-   print,''
+  n_ab=n_elements(abstr)
+  message,/info,/cont,'there are '+trim(n_ab)+' different elements. Their types are:'
+  FOR i=0,n_ab-1 DO BEGIN
+    type=abstr[i].type
+    CASE type OF
+      0: type_text='derived algebraically (single line)'
+      1: type_text='reference'
+      2: type_text='variable (multiple lines)'
+      3: type_text='fixed (/fixed_abund keyword)'
+    ENDCASE
+    type_text=strpad(type_text,40,fill=' ',/after)
+    z2element,abstr[i].elt_num,name,/symbol
+    name=strpad(name,2,fill=' ',/after)
+    print,format='(5x,i3,".",i5,2x,a2,"  type=",i1,"  -- ",a40)',i+1,abstr[i].elt_num,name,abstr[i].type,type_text
+  ENDFOR
+  print,''
 ENDIF 
 
 return,abstr
