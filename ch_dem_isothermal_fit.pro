@@ -87,6 +87,10 @@ FUNCTION ch_dem_isothermal_fit, line_data, ldens=ldens, lpress=lpress, $
 ;      Ver. 1, 11-May-2025, Peter Young
 ;      Ver. 2, 30-Jun-2025, Peter Young
 ;        Fixed bug in specification of INIT when abundances are varied.
+;      Ver. 3, 19-May-2026, Peter Young
+;        Added interr_scale in call to ch_dem_write_results.
+;      Ver. 4, 13-Nov-2026, Peter Young
+;        Fixed bug in calculation of ld_all.model_int.
 ;-
 
 
@@ -278,13 +282,10 @@ aa=mpfitfun('ch_dem_isothermal_fit_fn',findgen(nfit), int , err, init, $
             perror=sigmaa, /quiet, bestnorm=bestnorm,yfit=yfit, $
             parinfo=parinfo,status=status, functargs= other,errmsg=errmsg)
 
-
 ;
 ; This updates abstr with the optimized abundances.
 ;
 ch_isothermal_abund_results,abstr,ld,aa,sigmaa,ltemp,interr_scale=interr_scale
-
-
 
 chi2=bestnorm/float(nfit-np)
 
@@ -295,8 +296,7 @@ chi2=bestnorm/float(nfit-np)
 ;  - the abundance results
 ;
 ld_fit.model_int=yfit
-IF NOT keyword_set(quiet) THEN ch_dem_write_results,ld_fit, abstr
-
+IF NOT keyword_set(quiet) THEN ch_dem_write_results,ld_fit, abstr, interr_scale=interr_scale
 
 chi2=bestnorm/float(nfit-np)
 IF NOT keyword_set(quiet) THEN BEGIN 
@@ -307,7 +307,6 @@ IF NOT keyword_set(quiet) THEN BEGIN
   print,''
   print,format='("Reduced chi^2: ",f8.2)',chi2
 ENDIF 
-
 
 ;
 ; Compute the T_eff of each line in LD_ALL and populate the ab_ind
@@ -332,9 +331,8 @@ FOR i=0,nl-1 DO BEGIN
   k=where(contrib NE 0.)
   y2=spl_init(ltemp[k],alog10(contrib[k]))
   yi=spl_interp(ltemp[k],alog10(contrib[k]),y2,aa[0])
-  ld_all[i].model_int=ab_i*yi*10.^aa[1]
+  ld_all[i].model_int=ab_i*10.^yi*10.^aa[1]
 ENDFOR 
-
 
 ;
 ; Compute column depth distribution. 
